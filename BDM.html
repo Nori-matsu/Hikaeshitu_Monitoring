@@ -10,7 +10,7 @@
 
 <body bgcolor="ghostwhite" text="darkslategray">
     <h5 align="center">電気系控え室の混雑状況・CO2濃度・温度・湿度を15分ごとに計測しています。
-    <br>換気のタイミング、エアコンの調整、控え室の空き具合の確認、等に活用していただけたら幸いです。
+    <br>換気のタイミング、エアコンの調整、控え室の空き具合の確認等に活用していただけたら幸いです。
     <br>(※数値はあくまで目安であり、正しさを保証するものではありません。)</h5>
 
     <table height="450" width="1250" border="1">
@@ -34,7 +34,7 @@
             </td>
             <td width="250">
               <div class="twitter_widget_style">
-              <a class="twitter-timeline" data-width="250" data-height="450" data-theme="light" data-link-color="#2B7BB9" href="https://twitter.com/241bot1">Tweets by 241bot1</a>
+                <a class="twitter-timeline" data-width="250" data-height="450" data-theme="light" href="https://twitter.com/eeic_hikae">Tweets by eeic_hikae</a>
               <script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){
                 js=d.createElement(s);js.id=id;js.src=p+"://platform.twitter.com/widgets.js";fjs.parentNode.insertBefore(js,fjs);}}(document,"script","twitter-wjs");</script>
               </div>
@@ -43,6 +43,7 @@
     </table>
     <h6 align="center">混雑状況は、室内に設置した2台のカメラからの映像を、Optical Flowで物体検出することにより推定しています。
     <br>カメラは15分おきに数秒起動し、撮影された動画ファイルは人数推定後削除されます。
+    <br>温度・湿度センサーにはRHT03を、CO2センサーにはMH-Z19を使用しています。
     <br>Milkcocoaによりグラフはリアルタイムで更新されます。</h6>
 
     <script type="text/javascript">
@@ -75,45 +76,63 @@
 
         // milkcocoa　からデータ獲得
         var milkcocoa = new MilkCocoa('uniixkmdl8v.mlkcca.com');
-        var datastore = []; //全データ
+        //全データ
+        var datastore = [];
+        var camera1 = [];
+        var camera2 = [];
 
-        milkcocoa.dataStore('test').stream().size(40).next(function(err, datas) {
+        milkcocoa.dataStore('production').stream().size(40).next(function(err, datas) {
 
           datastore = datas.map(function(d) {
             return {
               timestamp : new Date(d.timestamp),
-              num_people : Number(d.value.num_people),
+              num_people : 0,
               co2: Number(d.value.co2),
               tmp : Number(d.value.tmp),
               hum : Number(d.value.hum)
             }
           });
           console.log(datastore);
+        });
+
+        milkcocoa.dataStore('camera1').stream().size(40).next(function(err, datas) {
+
+          camera1 = datas.map(function(d) {
+            return {
+              timestamp : new Date(d.timestamp),
+              num_people : Number(d.value.num_people),
+            }
+          });
+          console.log(camera1);
+        });
+
+        milkcocoa.dataStore('camera2').stream().size(40).next(function(err, datas) {
+
+          camera2 = datas.map(function(d) {
+            return {
+              timestamp : new Date(d.timestamp),
+              num_people : Number(d.value.num_people),
+            }
+          });
+          console.log(camera2);
+
+          synthesize();
+        });
+
+
+        // datastoreにcamera1,camera2のデータ統合
+        function synthesize() {
+
+          for(var i = 0; i < (camera1.length < camera2.length ? camera1.length : camera2.length); i++) {
+            num = Number(camera1[i]["num_people"]) + Number(camera2[i]["num_people"]);
+            datastore[i]["num_people"] = String(num);
+          }
+          console.log(datastore);
 
           svg1 = d3.select("#graph").append("svg").attr("width", 800).attr("height", 400);
           createwavegraph(default_type);
           createtitle();
-
-        });
-
-        // milkcocoaの更新を反映
-        milkcocoa.dataStore('test').on('push', function(pushed) {
-
-          datastore.push({
-            timestamp : new Date(d.timestamp),
-            num_people : Number(d.value.num_people),
-            co2: Number(d.value.co2),
-            tmp : Number(d.value.tmp),
-            hum : Number(d.value.hum)
-          });
-          // 先頭を削除
-          datastore.shift();
-
-          // 更新時の描画
-          createwavegraph(default_type);
-          createtitle();
-
-      });
+        }
 
         //タイトルバーの作成
         function createtitle() {
@@ -151,7 +170,6 @@
             selected = obj.id;
             obj.style.backgroundColor = "skyblue";
             createwavegraph(selected);
-            //rawtweet();
         }
 
         //折れ線グラフの作成  dはselected
@@ -247,7 +265,6 @@
                   .attr("transform", "translate(50,0)")
                   .call(yAxis);
 
-              //xscale.ticks(d3.timeMinute.every(5));
               var xAxis = d3.axisBottom(xscale.range([0 + xmargin, 800 - xmargin]))
                   .ticks(10)
                   .tickFormat(d3.timeFormat("%H:%M"));
